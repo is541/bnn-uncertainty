@@ -2,7 +2,7 @@ import math
 import torch.optim as optim
 import sys
 #sys.path.append('../')
-from BayesBackpropagation import *
+from BayesBackpropagation_OG import *
 import matplotlib.pyplot as plt
 plt.switch_backend('agg')
 
@@ -27,7 +27,7 @@ def train(net, optimizer, data, target, NUM_BATCHES, epoch):
         
 
 #Hyperparameter setting
-TRAIN_EPOCHS = 800
+TRAIN_EPOCHS = 900
 SAMPLES = 5
 TEST_SAMPLES = 10
 BATCH_SIZE = 200
@@ -40,34 +40,37 @@ SIGMA_2 = torch.FloatTensor([math.exp(-6)]).to(DEVICE)
 
 print('Generating Data set.')
 
-#Data Generation step
-# The data for regression is generated using NumPy. 
-# The input data consists of a set of 10 batches, with each batch having 200 data points. 
-# Each data point is a scalar value randomly generated between -0.1 and 0.61, and added with some noise.
+
+
+
 if torch.cuda.is_available():
     Var = lambda x, dtype=torch.cuda.FloatTensor: Variable(torch.from_numpy(x).type(dtype)) #converting data to tensor
 else:
     Var = lambda x, dtype=torch.FloatTensor: Variable(torch.from_numpy(x).type(dtype)) #converting data to tensor
 
+
+#Data Generation step from paper
+x = np.random.uniform(-0.1, 0.61, size=(NUM_BATCHES,BATCH_SIZE))
+noise = np.random.normal(0, 0.02, size=(NUM_BATCHES,BATCH_SIZE)) #metric as mentioned in the paper
+y = x + 0.3*np.sin(2*np.pi*(x+noise)) + 0.3*np.sin(4*np.pi*(x+noise)) + noise
+
+x_test = np.linspace(-0.5, 1,TEST_BATCH_SIZE)
+y_test = x_test + 0.3*np.sin(2*np.pi*x_test) + 0.3*np.sin(4*np.pi*x_test)
+
+#Data Generation step
+# The data for regression is generated using NumPy. 
+# The input data consists of a set of 10 batches, with each batch having 200 data points. 
+# Each data point is a scalar value randomly generated between -0.1 and 0.61, and added with some noise.
+
+#Data Generation step from Ilaria's paper
 # new noise model
-def noise_model(x):
-    return 0.45*(x+0.5)**2
+#def noise_model(x):
+#    return 0.45*(x+0.5)**2
 
-#x = np.random.uniform(-0.1, 0.61, size=(NUM_BATCHES,BATCH_SIZE))
-
-#noise = np.random.normal(0, 0.02, size=(NUM_BATCHES,BATCH_SIZE)) #metric as mentioned in the paper
-#y = x + 0.3*np.sin(2*np.pi*(x+noise)) + 0.3*np.sin(4*np.pi*(x+noise)) + noise
-
-x_test = np.linspace(-1, 1, TEST_BATCH_SIZE)
-#y_test = x_test + 0.3*np.sin(2*np.pi*x_test) + 0.3*np.sin(4*np.pi*x_test)
-
-# same regression as in deterministic-variational-inference (DVI)
-# DVI 2 uses uniform noise, independent of x
-# DVI uses noise model
-x = np.random.rand(NUM_BATCHES, BATCH_SIZE) - 0.5
-#y = -(x+0.5)*np.sin(3 * np.pi *x) + noise
-y_test = -(x_test+0.5)*np.sin(3 * np.pi *x_test)
-y = -(x+0.5)*np.sin(3 * np.pi *x) + np.random.normal(0, noise_model(x))
+#x_test = np.linspace(-1, 1, TEST_BATCH_SIZE)
+#x = np.random.rand(NUM_BATCHES, BATCH_SIZE) - 0.5
+#y_test = -(x_test+0.5)*np.sin(3 * np.pi *x_test)
+#y = -(x+0.5)*np.sin(3 * np.pi *x) + np.random.normal(0, noise_model(x))
 
 
 def BBB_Regression(x,y,x_test,y_test):
@@ -79,7 +82,6 @@ def BBB_Regression(x,y,x_test,y_test):
     X_test = Var(x_test)
 
     #Declare Network
-    # Defines the BNN architecture by calling the BayesianNetwork class constructor.
     net = BayesianNetwork(inputSize = 1,\
                         CLASSES = CLASSES, \
                         layers=np.array([16,16,16]), \
@@ -87,12 +89,12 @@ def BBB_Regression(x,y,x_test,y_test):
                         SAMPLES = SAMPLES, \
                         BATCH_SIZE = BATCH_SIZE,\
                         NUM_BATCHES = NUM_BATCHES,\
-                        hasScalarMixturePrior = False,\
+                        hasScalarMixturePrior = True,\
                         PI = PI,\
                         SIGMA_1 = SIGMA_1,\
                         SIGMA_2 = SIGMA_2,\
                         GOOGLE_INIT= False).to(DEVICE)
-
+    
     #Declare the optimizer
     optimizer = optim.SGD(net.parameters(),lr=1e-3,momentum=0.95)
 
@@ -103,15 +105,11 @@ def BBB_Regression(x,y,x_test,y_test):
 
     print('Training Ends!')
 
-    # Testing
-    # Computes mean prediction and standard deviation for the test data by calling the forward method of the BNN for a given number of test samples.
+    #Testing
     outputs = torch.zeros(TEST_SAMPLES+1, TEST_BATCH_SIZE, CLASSES).to(DEVICE)
-    #print(outputs.shape)
-    #print((net.forward(X).shape))
-    #print(TEST_SAMPLES)
     for i in range(TEST_SAMPLES):
-        outputs[i] = net.forward(X_test, infer = True)
-    outputs[TEST_SAMPLES] = net.forward(X_test, infer = True)
+        outputs[i] = net.forward(X_test)
+    outputs[TEST_SAMPLES] = net.forward(X_test)
     pred_mean = outputs.mean(0).data.cpu().numpy().squeeze(1) #Compute mean prediction
     pred_std = outputs.std(0).data.cpu().numpy().squeeze(1) #Compute standard deviation of prediction for each data point
 
@@ -123,12 +121,12 @@ def BBB_Regression(x,y,x_test,y_test):
     plt.plot(x_test, y_test, c='grey', label='truth')
     plt.legend()
     plt.tight_layout()
-    plt.savefig('Results/Regression_BBB_LRT_DVI.png')
-    plt.savefig('Results/Regression_BBB_LRT_DVI.eps', format='eps', dpi=1000)
+    plt.savefig('Results/Regression_BBB_base_paper9.png')
+    plt.savefig('Results/Regression_BBB_base_paper9.eps', format='eps', dpi=1000)
     plt.clf()
 
     #Save the trained model
-    torch.save(net.state_dict(), './Regression_LRT_DVI.pth')
+    torch.save(net.state_dict(), 'Models/Regression_BBB_base_paper9.pth')
 
 
 #Comparing to standard neural network
@@ -183,8 +181,8 @@ def NN_Regression(x,y,x_test,y_test):
     plt.plot(x_test, y_test, c='grey', label='truth')
     plt.legend()
     plt.tight_layout()
-    plt.savefig('Results/Regression_NN_LRT_DVI.png')
-    plt.savefig('Results/Regression_NN_LRT_DVI.eps', format='eps', dpi=1000)
+    plt.savefig('Results/Regression_NN_base_paper9.png')
+    plt.savefig('Results/Regression_NN_base_paper9.eps', format='eps', dpi=1000)
     plt.clf()
 
 BBB_Regression(x,y,x_test,y_test)

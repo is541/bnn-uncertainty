@@ -8,12 +8,18 @@ plt.switch_backend('agg')
 hasGPU = False
 DEVICE = torch.device("cuda" if hasGPU else "cpu")
 
+''' 
 if len(sys.argv) < 3:
     print('Call: python3 WeightPruning.py [hiddenunits] [modelpath]')
     sys.exit()
 
 HIDDEN = int(sys.argv[1])
 modelpath = sys.argv[2]
+'''
+
+
+HIDDEN = 128
+modelpath = "Results/BBB_fmnist_128_adam_ID0_notebook.pth"
 
 # Initialise a model to load the saved model into
 BATCH_SIZE = 125
@@ -85,6 +91,8 @@ def getThreshold(model,buckets):
 
 buckets = np.asarray([0,50,75,95,98])
 thresholds = getThreshold(model,buckets)
+model_name = modelpath.split("/")[1].split(".")[0]
+
 
 for index in range(buckets.size):
     print(buckets[index],'-->',thresholds[index])
@@ -99,4 +107,4 @@ for index in range(buckets.size):
         model1.state_dict()['layers.'+str(i)+'.weight_rho'].data.copy_(rho * signalRatio)
         model1.state_dict()['layers.'+str(i)+'.weight_mu'].data.copy_(mu * signalRatio)
 
-    torch.save(model1.state_dict(), './Models/Pruned_'+str(buckets[index])+'.pth')
+    torch.save(model1.state_dict(), 'Models/' + model_name + '_Pruned_'+str(buckets[index])+'.pth')

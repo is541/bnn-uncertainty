@@ -28,7 +28,7 @@ class BayesianModule(nn.Module):
 class BBB_Hyper(object):
 
     def __init__(self, ):
-        self.dataset = 'mnist'  # mnist || cifar10 || fmnist
+        self.dataset = 'fmnist'  # mnist || cifar10 || fmnist
 
         self.lr = 1e-4
         self.momentum = 0.95
@@ -40,7 +40,7 @@ class BBB_Hyper(object):
         self.rho_init = -8
         self.multiplier = 1.
 
-        self.max_epoch = 50
+        self.max_epoch = 40
         self.n_samples = 1
         self.n_test_samples = 10
         self.batch_size = 125
@@ -121,153 +121,7 @@ class BBBLayer(nn.Module):
 
         return output
 
-# code taken from danielkelshaw/WeightUncertainty to implement Local Reparametrization Trick
-class BBBLayerLRT(BayesianModule):
 
-    """Bayesian Linear Layer with Local Reparameterisation Trick.
-    Implementation of a Bayesian Linear Layer utilising the 'local
-    reparameterisation trick' in order to sample directly from the
-    activations.
-    """
-
-    def __init__(self,
-                 in_features: int,
-                 out_features: int,
-                 std_prior: Optional[float] = 1.0) -> None:
-
-        """Bayesian Linear Layer with Local Reparameterisation Trick.
-        Parameters
-        ----------
-        in_features : int
-            Number of features to feed into the layer.
-        out_features : int
-            Number of features produced by the layer.
-        std_prior : float
-            Sigma to be used for the normal distribution in the prior.
-        """
-
-        super().__init__()
-
-        self.in_feature = in_features
-        self.out_feature = out_features
-        self.std_prior = std_prior
-        self.lpw = 0.
-        self.lqw = 0.
-
-        w_mu = torch.empty(out_features, in_features).uniform_(-0.2, 0.2)
-        self.weight_mu = nn.Parameter(w_mu)
-
-        w_rho = torch.empty(out_features, in_features).uniform_(-5.0, -4.0)
-        self.weight_rho = nn.Parameter(w_rho)
-
-        bias_mu = torch.empty(out_features).uniform_(-0.2, 0.2)
-        self.bias_mu = nn.Parameter(bias_mu)
-
-        bias_rho = torch.empty(out_features).uniform_(-5.0, -4.0)
-        self.bias_rho = nn.Parameter(bias_rho)
-
-        self.epsilon_normal = torch.distributions.Normal(0, 1)
-
-        self.kl_divergence = 0.0
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-
-        """Calculates the forward pass through the linear layer.
-        The local reparameterisation trick is used to estimate the
-        gradients with respect to the parameters of a distribution - it
-        takes advantage of the fact that, for a fixed input and Gaussian
-        distributions over the weights, the resulting distribution over
-        the activations is also Gaussian.
-        Instead of sampling the weights individually and using them to
-        compute a sample from the activation - we can sample from the
-        distribution over activations. This yields a lower variance
-        gradient estimator which makes training faster and more stable.
-        Parameters
-        ----------
-        x : Tensor
-            Inputs to the Bayesian Linear Layer.
-        Returns
-        -------
-        Tensor
-            Output from the Bayesian Linear Layer.
-        """
-
-        epsilon_W = Variable(torch.Tensor(self.out_feature, self.in_feature).normal_(0, 1))
-        epsilon_b = Variable(torch.Tensor(self.out_feature).normal_(0, 1))
-        W = self.weight_mu + torch.log(1+torch.exp(self.weight_rho)) * epsilon_W
-        b = self.bias_mu + torch.log(1+torch.exp(self.bias_rho)) * epsilon_b
-
-        w_std = torch.log(1 + torch.exp(self.weight_rho))
-        b_std = torch.log(1 + torch.exp(self.bias_rho))
-
-        act_mu = F.linear(x, self.weight_mu)
-        act_std = torch.sqrt(F.linear(x.pow(2), w_std.pow(2)))
-
-        w_eps = self.epsilon_normal.sample(act_mu.size())
-        bias_eps = self.epsilon_normal.sample(b_std.size())
-
-        w_out = act_mu + act_std * w_eps
-        b_out = self.bias_mu + b_std * bias_eps
-
-        w_kl = self.kld(
-            mu_prior=0.0,
-            std_prior=self.std_prior,
-            mu_posterior=self.weight_mu,
-            std_posterior=w_std
-        )
-
-        bias_kl = self.kld(
-            mu_prior=0.0,
-            std_prior=0.1,
-            mu_posterior=self.bias_mu,
-            std_posterior=b_std
-        )
-
-        self.kl = w_kl + bias_kl
-        self.lqw = log_gaussian_rho(W, self.weight_mu, self.weight_rho).sum() + \
-                   log_gaussian_rho(b, self.bias_mu, self.bias_rho).sum()
-        self.lpw = log_gaussian(W, 0, self.std_prior).sum() + log_gaussian(b, 0, self.std_prior).sum()
-
-        return w_out + b_out
-
-    def kld(self,
-            mu_prior: float,
-            std_prior: float,
-            mu_posterior: torch.Tensor,
-            std_posterior: torch.Tensor) -> torch.Tensor:
-
-        """Calculates the KL Divergence.
-        The only 'downside' to the local reparameterisation trick is
-        that, as the weights are not being sampled directly, the KL
-        Divergence can not be calculated through the use of MC sampling.
-        Instead, the closed form of the KL Divergence must be used;
-        this restricts the prior and posterior to be Gaussian.
-        However, the use of a Gaussian prior / posterior results in a
-        lower variance and hence faster convergence.
-        Parameters
-        ----------
-        mu_prior : float
-            Mu of the prior normal distribution.
-        std_prior : float
-            Sigma of the prior normal distribution.
-        mu_posterior : Tensor
-            Mu to approximate the posterior normal distribution.
-        std_posterior : Tensor
-            Sigma to approximate the posterior normal distribution.
-        Returns
-        -------
-        Tensor
-            Calculated KL Divergence.
-        """
-
-        kl_divergence = 0.5 * (
-                2 * torch.log(std_prior / std_posterior) -
-                1 +
-                (std_posterior / std_prior).pow(2) +
-                ((mu_prior - mu_posterior) / std_prior).pow(2)
-        ).sum()
-
-        return kl_divergence
 
 # BBB class defines the neural network architecture by instantiating three BBBLayer objects
 class BBB(nn.Module):
@@ -276,12 +130,9 @@ class BBB(nn.Module):
 
         self.n_input = n_input
         self.layers = nn.ModuleList([])
-        self.layers.append(BBBLayerLRT(n_input, hyper.hidden_units))
-        self.layers.append(BBBLayerLRT(hyper.hidden_units, hyper.hidden_units))
-        self.layers.append(BBBLayerLRT(hyper.hidden_units, n_ouput))
-        #self.layers.append(BBBLayer(n_input, hyper.hidden_units, hyper))
-        #self.layers.append(BBBLayer(hyper.hidden_units, hyper.hidden_units, hyper))
-        #self.layers.append(BBBLayer(hyper.hidden_units, n_ouput, hyper))
+        self.layers.append(BBBLayer(n_input, hyper.hidden_units, hyper))
+        self.layers.append(BBBLayer(hyper.hidden_units, hyper.hidden_units, hyper))
+        self.layers.append(BBBLayer(hyper.hidden_units, n_ouput, hyper))
 
     def forward(self, data, infer=False):
         output = F.relu(self.layers[0](data.view(-1, self.n_input)))
@@ -294,9 +145,6 @@ class BBB(nn.Module):
         lqw = self.layers[0].lqw + self.layers[1].lqw + self.layers[2].lqw
         return lpw, lqw
 
-    def get_kl(self):
-        kl = self.layers[0].kl + self.layers[1].kl + self.layers[2].kl
-        return kl
 
 #  function calculates the log probabilities of the model evidence, lpw, lqw, 
 #  and the log-likelihood of the data, l_likelihood.
@@ -306,7 +154,7 @@ def probs(model, hyper, data, target):
         output = torch.log(model(data))
 
         sample_log_pw, sample_log_qw = model.get_lpw_lqw()
-        sample_kl = model.get_kl()
+        
         sample_log_likelihood = -F.nll_loss(output, target, reduction='sum') * hyper.multiplier
 
         s_log_pw += sample_log_pw / hyper.n_samples
@@ -314,7 +162,7 @@ def probs(model, hyper, data, target):
 
         s_log_likelihood += sample_log_likelihood / hyper.n_samples
 
-    return s_log_pw, s_log_qw, s_log_likelihood, sample_kl
+    return s_log_pw, s_log_qw, s_log_likelihood
 
 # calculates the ELBO as the difference between the KL divergence between the prior and the posterior distribution 
 # of the weights and biases and the log-likelihood of the data multiplied by a scaling factor, beta.
@@ -335,7 +183,7 @@ def train(model, optimizer, loader, train=True):
         #beta = 2 ** (m - (batch_id + 1)) / (2 ** m - 1)
         beta = 1 / (m)
 
-        l_pw, l_qw, l_likelihood, kl = probs(model, hyper, data, target)
+        l_pw, l_qw, l_likelihood = probs(model, hyper, data, target)
         loss = ELBO(l_pw, l_qw, l_likelihood, beta)
         loss_sum += loss / len(loader)
 
@@ -404,8 +252,8 @@ def BBB_run(hyper, train_loader, valid_loader, test_loader, n_input, n_ouput, id
     wr.writerow(['epoch', 'valid_acc', 'test_acc', 'train_losses'])
 
     for i in range(hyper.max_epoch):
-        wr.writerow((i + 1, 1 - valid_accs[i] / hyper.eval_batch_size,
-                     1 - test_accs[i] / hyper.eval_batch_size, train_losses[i]))
+        wr.writerow((i + 1, valid_accs[i] / hyper.eval_batch_size,
+                     test_accs[i] / hyper.eval_batch_size, train_losses[i]))
 
     torch.save(model.state_dict(), path + '.pth')
 
@@ -445,7 +293,7 @@ if __name__ == '__main__':
     elif hyper.dataset == 'fmnist':
         transform = transforms.Compose([
             transforms.ToTensor(),
-            transforms.Lambda(lambda x: x * 255. / 126.),  # divide as in paper
+            transforms.Lambda(_my_normalization),  # divide as in paper
         ])
 
         train_data = datasets.FashionMNIST(
@@ -471,7 +319,7 @@ if __name__ == '__main__':
 
         train_data = datasets.CIFAR10(
             root='data',
-            train=True,
+            train=True, 
             download=False,
             transform=transform)
         test_data = datasets.CIFAR10(
@@ -528,23 +376,25 @@ if __name__ == '__main__':
     hyper.rho_init = rho
     hyper.s1 = float(np.exp(-s1))
     hyper.s2 = float(np.exp(-s2))
-    model = BBB_run(hyper, train_loader, valid_loader, test_loader, n_input, n_ouput)
+    #model = BBB_run(hyper, train_loader, valid_loader, test_loader, n_input, n_ouput)
 
     #exec(open("WeightPruning.py").read())
-
-    """Evaluate pruned models"""
-    '''import os
-    for root, dirs, files in os.walk("Results/400/"):
+    # 
+#''' 
+   #"""Evaluate pruned models"""
+    import os
+    for root, dirs, files in os.walk("Models/"):
         for file in files:
-            if file.startswith('BBB2_mnist_400_0.0001_samples1_ID4_Pruned_98') and file.endswith(".pth"):
+            if file.startswith('BBB_fmnist') and file.endswith(".pth"):
                 print(file)
                 model1 = BBB(n_input, n_ouput, hyper)
-                model1.load_state_dict(torch.load('Results/400/' + file))
+                model1.load_state_dict(torch.load('Models/' + file))
                 model1.eval()
-                model1.cuda()
+           
                 print('Valid', round(1 - evaluate(model1, valid_loader) / hyper.eval_batch_size, 5) * 100)
                 print('Valid 10', round(1 - evaluate(model1, valid_loader, samples=10) / hyper.eval_batch_size, 5) * 100)
-                #print('Test', round(1 - evaluate(model1, test_loader) / hyper.eval_batch_size, 5) * 100)
-                #print('Test 10', round(1 - evaluate(model1, test_loader, samples=10) / hyper.eval_batch_size, 5) * 100)'''
-
+                print('Test', round(1 - evaluate(model1, test_loader) / hyper.eval_batch_size, 5) * 100)
+                print('Test 10', round(1 - evaluate(model1, test_loader, samples=10) / hyper.eval_batch_size, 5) * 100)
+            #'''
+    
 
