@@ -1,6 +1,14 @@
 
 # Deterministic Variational Inference
 
+# ADDED readme notes - 07/03/2023
+Scripts used for main experiments:
+- ToyData-v1.ipynb
+  --> Runs toy regression on dummy task from Wu19 (same as scripts/toy_data_regression.py in markovalexander/DVI-master)
+      Relicates result obtained by the authors in ToyData.ipynb
+
+# OLD README From the authors of the repo
+
 This code accompanies the publication [**Fixing Variational Bayes: Deterministic Variational Inference for Bayesian Neural Networks**](https://arxiv.org/abs/1810.03958)
 
 The notebook `ToyData.ipynb` demonstrates how to use the method to fit a toy 1-dimensional dataset and reproduce Figure 3 in the paper.
