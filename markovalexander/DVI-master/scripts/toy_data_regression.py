@@ -19,7 +19,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--batch_size', type=int, default=500)
 parser.add_argument('--mcvi', action='store_true')
 parser.add_argument('--hid_size', type=int, default=128)
-parser.add_argument('--heteroskedastic', default=False, action='store_true')
+parser.add_argument('--heteroskedastic', default=True, action='store_true')
+# parser.add_argument('--heteroskedastic', default=False, action='store_true')
 parser.add_argument('--data_size', type=int, default=500)
 parser.add_argument('--homo_var', type=float, default=0.35)
 parser.add_argument('--homo_log_var_scale', type=float,
@@ -32,10 +33,11 @@ parser.add_argument('--test_size', type=int, default=100)
 parser.add_argument('--lr', type=float, default=1e-2)
 parser.add_argument('--gamma', type=float, default=0.5,
                     help='lr decrease rate in MultiStepLR scheduler')
-parser.add_argument('--epochs', type=int, default=23000)
+# parser.add_argument('--epochs', type=int, default=23000)
+parser.add_argument('--epochs', type=int, default=10001)
 parser.add_argument('--draw_every', type=int, default=1000)
 parser.add_argument('--milestones', nargs='+', type=int,
-                    default=[3000, 5000, 9000, 13000])
+                    default=[1000, 3000, 5000, 9000, 13000])
 
 
 def base_model(x):
@@ -44,14 +46,18 @@ def base_model(x):
 
 def noise_model(x, args):
     if args.heteroskedastic:
-        return 1 * (x + 0.5) ** 2
+        # return 1 * (x + 0.5) ** 2
+        return 0.45 * (x + 0.5) ** 2
     else:
         return args.homo_var
 
 
 def sample_data(x, args):
-    return base_model(x) + np.random.normal(0, noise_model(x, args),
-                                            size=x.size).reshape(x.shape)
+    if args.heteroskedastic:
+        return base_model(x) + np.random.normal(0, noise_model(x, args)).reshape(x.shape)
+    else:
+        return base_model(x) + np.random.normal(0, noise_model(x, args),
+                                                size=x.size).reshape(x.shape)
 
 
 class Model(nn.Module):
@@ -65,32 +71,28 @@ class Model(nn.Module):
         else:
             self.out = ReluGaussian(hid_size, 1)
 
-        if args.mcvi:
-            self.mcvi()
+        # if args.mcvi:
+        #     self.mcvi()
 
     def forward(self, x):
         x = self.linear(x)
         x = self.relu1(x)
         return self.out(x)
 
-    def mcvi(self):
-        self.linear.mcvi()
-        self.relu1.mcvi()
-        self.out.mcvi()
+    # def mcvi(self):
+    #     self.linear.mcvi()
+    #     self.relu1.mcvi()
+    #     self.out.mcvi()
 
-    def determenistic(self):
-        self.linear.determenistic()
-        self.relu1.mcvi()
-        self.out.mcvi()
+    # def determenistic(self):
+    #     print("******************************")
+    #     print("IN determenistic constructor")
+    #     print("******************************")
+    #     self.linear.determenistic()
+    #     self.relu1.mcvi()
+    #     self.out.mcvi()
 
-
-if __name__ == "__main__":
-    args = parser.parse_args()
-    args.device = torch.device(
-        'cuda:{}'.format(args.device) if torch.cuda.is_available() else 'cpu')
-
-    print(args)
-
+def train_and_predict(args):
     model = Model(args).to(args.device)
     loss = RegressionLoss(model, args)
     x_train, y_train, x_test, y_test, toy_data = generate_regression_data(args,
@@ -103,8 +105,10 @@ if __name__ == "__main__":
                                                      gamma=args.gamma)
 
     if args.mcvi:
+        print("Mode: mcvi")
         mode = 'mcvi'
     else:
+        print("Mode: det")
         mode = 'det'
     step = 0
 
@@ -118,8 +122,10 @@ if __name__ == "__main__":
         neg_elbo.backward()
 
         nn.utils.clip_grad.clip_grad_value_(model.parameters(), 0.1)
-        scheduler.step()
+        # scheduler.step()
+        # optimizer.step()
         optimizer.step()
+        scheduler.step()
 
         if epoch % args.draw_every == 0:
             print("epoch : {}".format(epoch))
@@ -134,8 +140,12 @@ if __name__ == "__main__":
                                         'std': lambda x: noise_model(x,
                                                                      args)},
                                        predictions=predictions,
-                                       name='pics/{}/after_{}.png'.format(
-                                           mode, epoch))
+                                       name='NEWpics/regression/{}/after_{}.png'.format(
+                                           mode, epoch),
+                                       heteroskedastic=args.heteroskedastic,
+                                       homo_log_var_scale=args.homo_log_var_scale,
+                                       mcvi=args.mcvi
+                                       )
 
     with torch.no_grad():
         predictions = get_predictions(x_train, model, args, args.mcvi)
@@ -143,26 +153,52 @@ if __name__ == "__main__":
                                {'mean': base_model,
                                 'std': lambda x: noise_model(x, args)},
                                predictions=predictions,
-                               name='pics/{}/last.png'.format(
-                                   mode))
+                               name='NEWpics/regression/{}/last.png'.format(
+                                   mode),
+                               heteroskedastic=args.heteroskedastic,
+                               homo_log_var_scale=args.homo_log_var_scale,
+                               mcvi=args.mcvi
+                               )
+
+if __name__ == "__main__":
+    args = parser.parse_args()
+    args.device = torch.device(
+        'cuda:{}'.format(args.device) if torch.cuda.is_available() else 'cpu')
+    
+    args.device = 'mps'
+
+    print(args)
+    train_and_predict(args)
 
     if args.mcvi:
-        model.determenistic()
-        with torch.no_grad():
-            predictions = get_predictions(x_train, model, args, False)
-            draw_regression_result(toy_data,
-                                   {'mean': base_model,
-                                    'std': lambda x: noise_model(x, args)},
-                                   predictions=predictions,
-                                   name='pics/{}/swapped.png'.format(
-                                       mode))
+        args_swapped = parser.parse_args()
+        args_swapped.device = torch.device(
+            'cuda:{}'.format(args_swapped.device) if torch.cuda.is_available() else 'cpu')
+        args_swapped.mcvi = False
+        train_and_predict(args_swapped)
+        # model = Model(args_swapped).to(args_swapped.device)
+        # # model.determenistic()
+        # with torch.no_grad():
+        #     predictions = get_predictions(x_train, model, args_swapped, False)
+        #     draw_regression_result(toy_data,
+        #                            {'mean': base_model,
+        #                             'std': lambda x: noise_model(x, args_swapped)},
+        #                            predictions=predictions,
+        #                            name='NEWpics/regression/{}/swapped.png'.format(
+        #                                mode))
     else:
-        model.mcvi()
-        with torch.no_grad():
-            predictions = get_predictions(x_train, model, args, True)
-            draw_regression_result(toy_data,
-                                   {'mean': base_model,
-                                    'std': lambda x: noise_model(x, args)},
-                                   predictions=predictions,
-                                   name='pics/{}/swapped.png'.format(
-                                       mode))
+        args_swapped = parser.parse_args()
+        args_swapped.device = torch.device(
+            'cuda:{}'.format(args_swapped.device) if torch.cuda.is_available() else 'cpu')
+        args_swapped.mcvi = True
+        train_and_predict(args_swapped)
+        # model = Model(args_swapped).to(args_swapped.device)
+        # # model.mcvi()
+        # with torch.no_grad():
+        #     predictions = get_predictions(x_train, model, args_swapped, True)
+        #     draw_regression_result(toy_data,
+        #                            {'mean': base_model,
+        #                             'std': lambda x: noise_model(x, args_swapped)},
+        #                            predictions=predictions,
+        #                            name='NEWpics/regression/{}/swapped.png'.format(
+        #                                mode))

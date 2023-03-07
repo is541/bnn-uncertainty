@@ -107,10 +107,13 @@ class LeNetDVI(nn.Module):
         self.conv1 = MeanFieldConv2d(1, 6, 5, padding=2, certain=True)
         self.conv2 = MeanFieldConv2d(6, 16, 5)
 
-        if args.nonlinearity == 'relu':
-            layer_factory = ReluGaussian
-        else:
-            layer_factory = HeavisideGaussian
+        # # NOT WORKING
+        # if args.nonlinearity == 'relu':
+        #     layer_factory = ReluGaussian
+        # else:
+        #     layer_factory = HeavisideGaussian
+        # TEMP FIX
+        layer_factory = ReluGaussian
 
         self.fc1 = layer_factory(16 * 5 * 5, 120)
         self.fc2 = layer_factory(120, 84)

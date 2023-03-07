@@ -27,12 +27,14 @@ parser.add_argument('--test_size', type=int, default=100)
 parser.add_argument('--lr', type=float, default=1e-2)
 parser.add_argument('--gamma', type=float, default=0.5,
                     help='lr decrease rate in MultiStepLR scheduler')
-parser.add_argument('--epochs', type=int, default=23000)
+# parser.add_argument('--epochs', type=int, default=23000)
+parser.add_argument('--epochs', type=int, default=400)
 parser.add_argument('--draw_every', type=int, default=1000)
 parser.add_argument('--milestones', nargs='+', type=int,
                     default=[3000, 5000, 9000, 13000])
 parser.add_argument('--dataset', default='classification')
-parser.add_argument('--input_size', default=2, type=int)
+# parser.add_argument('--dataset', default='circles')
+parser.add_argument('--input_size', default=4, type=int)
 parser.add_argument('--mc_samples', default=1, type=int)
 
 
@@ -89,14 +91,13 @@ if __name__ == "__main__":
 
         y_logits = model(x_train)
         loss, categorical_mean, kl, logsoftmax = criterion(y_logits,
-                                                           y_onehot_train, step)
-
+                                                           y_onehot_train) #step
         pred = torch.argmax(logsoftmax, dim=1)
         loss.backward()
 
         nn.utils.clip_grad.clip_grad_value_(model.parameters(), 0.1)
-        scheduler.step()
         optimizer.step()
+        scheduler.step()
 
         if epoch % args.draw_every == 0:
             draw_classification_results(x_train, pred,
@@ -105,11 +106,11 @@ if __name__ == "__main__":
 
     with torch.no_grad():
         y_logits = model(x_train)
-        _, _, _, logsoftmax = criterion(y_logits, y_onehot_train, step)
+        _, _, _, logsoftmax = criterion(y_logits, y_onehot_train) # step
         pred = torch.argmax(logsoftmax, dim=1)
         draw_classification_results(x_train, pred, 'end_train.png', args)
 
         y_logits = model(x_test)
-        _, _, _, logsoftmax = criterion(y_logits, y_onehot_test, step)
+        _, _, _, logsoftmax = criterion(y_logits, y_onehot_test) # step
         pred = torch.argmax(logsoftmax, dim=1)
         draw_classification_results(x_test, pred, 'end_test.png', args)

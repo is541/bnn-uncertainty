@@ -18,7 +18,7 @@ def standard_gaussian(x):
     return one_ovr_sqrt2pi * tf.exp(-x*x / 2.0)
 
 def gaussian_cdf(x):
-    return 0.5 * (1.0 + tf.erf(x * one_ovr_sqrt2))
+    return 0.5 * (1.0 + tf.math.erf(x * one_ovr_sqrt2))
 
 def softrelu(x):
     return standard_gaussian(x) + x * gaussian_cdf(x)

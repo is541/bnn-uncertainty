@@ -22,7 +22,7 @@ class MLP(object):
     
     def make_placeholders(self):
         self.placeholders = {
-            'ipt_mean': tf.placeholder(tf.float32, [None, self.sizes[0]]),
+            'ipt_mean': tf.compat.v1.placeholder(tf.float32, [None, self.sizes[0]]),
         }
     
     def make(self):

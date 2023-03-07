@@ -21,7 +21,7 @@ parser.add_argument('--mcvi', action='store_true')
 parser.add_argument('--mc_samples', default=20, type=int)
 parser.add_argument('--clip_grad', type=float, default=0.5)
 parser.add_argument('--lr', type=float, default=1e-3)
-parser.add_argument('--epochs', type=int, default=150)
+parser.add_argument('--epochs', type=int, default=20)  # 150
 parser.add_argument('--zm', action='store_true')
 parser.add_argument('--no_mc', action='store_true')
 parser.add_argument('--use_samples', action='store_true')

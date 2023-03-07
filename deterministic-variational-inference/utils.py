@@ -10,7 +10,8 @@ def start_run():
     pid = os.getpid()
     run_id = "%s_%s" % (dt.datetime.now().strftime('%Y%m%d_%H%M%S'), pid)
     np.random.seed(0)
-    tf.set_random_seed(0)
+    tf.random.set_seed(0)
+    # tf.set_random_seed(0)
 
     print(''.join(['*' for _ in range(80)]))
     print('* RUN ID: %s ' % run_id)
@@ -36,11 +37,11 @@ def get_device_string(device_id):
     return '/cpu:0' if device_id < 0 else '/gpu:%s' % device_id
 
 def get_session():
-    config = tf.ConfigProto()
+    config = tf.compat.v1.ConfigProto()
     config.gpu_options.allow_growth = True
     config.allow_soft_placement = True
-    sess = tf.Session(config=config)
-    sess.run(tf.global_variables_initializer())
+    sess = tf.compat.v1.Session(config=config)
+    sess.run(tf.compat.v1.global_variables_initializer())
     return sess
 
 def restrict_dataset_size(dataset, size_fraction):
@@ -61,7 +62,8 @@ def batched(dataset, hypers):
 
 def make_optimizer(model_and_metrics, hypers):
     if hypers['optimizer'].strip().lower() == 'adam':
-        optimizer = tf.train.AdamOptimizer(hypers['learning_rate'])
+        # optimizer = tf.optimizers.Adam(hypers['learning_rate']) 
+        optimizer = tf.compat.v1.train.AdamOptimizer(hypers['learning_rate']) 
     elif hypers['optimizer'].strip().lower() == 'momentum':
         optimizer = tf.train.MomentumOptimizer(hypers['learning_rate'], 0.9)
     elif hypers['optimizer'].strip().lower() == 'sgd':
@@ -70,6 +72,13 @@ def make_optimizer(model_and_metrics, hypers):
         raise NotImplementedError('optimizer "%s" not recognized' % hypers['optimizer'])
         
     if hypers['gradient_clip'] > 0:
+        # print("STAMPO")
+        # var_list = [var.op.name for var in tf.compat.v1.trainable_variables()]
+        # var_list = tf.compat.v1.GraphKeys.GLOBAL_VARIABLES
+        # var_list = tf.compat.v1.trainable_variables()
+        # print(*var_list)
+        # with tf.GradientTape(persistent=True) as tape:
+            # gvs = optimizer.compute_gradients(model_and_metrics['metrics']['loss'], var_list=var_list, tape=tape)
         gvs = optimizer.compute_gradients(model_and_metrics['metrics']['loss'])
         capped_gvs = [(tf.clip_by_value(grad, -hypers['gradient_clip'], hypers['gradient_clip']), var) 
                       for grad, var in gvs
@@ -148,7 +157,7 @@ def train_valid_test(data, sess, model_and_metrics, train_op, hypers, verbose=Tr
     return summary, accuracies
 
 def piecewise_anneal(hypers, var_name, global_step):
-    return hypers[var_name] * tf.clip_by_value((tf.to_float(global_step) - hypers['warmup_updates'][var_name])/hypers['anneal_updates'][var_name], 0.0, 1.0)
+    return hypers[var_name] * tf.clip_by_value((tf.cast(global_step, tf.float32) - hypers['warmup_updates'][var_name])/hypers['anneal_updates'][var_name], 0.0, 1.0)
 
 
 def get_predictions(data, sess, model, hypers):

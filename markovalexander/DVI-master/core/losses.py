@@ -105,7 +105,7 @@ class ClassificationLoss(nn.Module):
         self.anneal = args.anneal_updates
         self.data_size = args.data_size
         self.mcvi = args.mcvi
-        self.use_samples = args.use_samples
+        # self.use_samples = args.use_samples
         self.n_samples = args.mc_samples
         self._step = 0
         self.log_mean = vars(args).get('change_criterion', False)
@@ -144,6 +144,7 @@ class ClassificationLoss(nn.Module):
             if hasattr(module, 'compute_kl'):
                 kl = kl + module.compute_kl()
 
+        # logsoftmax.to('mps')
         logprob = torch.sum(target.type(logsoftmax.type()) * logsoftmax, dim=1)
         batch_logprob = torch.mean(logprob)
 

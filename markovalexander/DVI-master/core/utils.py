@@ -23,7 +23,15 @@ def pred2acc(pred, y, batch_size):
     return (t / batch_size).item()
 
 
-def draw_regression_result(data, data_generator, predictions=None, name=None):
+def draw_regression_result(
+    data, 
+    data_generator, 
+    predictions=None, 
+    name=None, 
+    heteroskedastic=True,
+    homo_log_var_scale=2 * math.log(0.2),
+    mcvi=False,
+):
     x = predictions[0]
     train_x = np.arange(np.min(x.reshape(-1)),
                         np.max(x.reshape(-1)), 1 / 100)
@@ -45,9 +53,21 @@ def draw_regression_result(data, data_generator, predictions=None, name=None):
         x = predictions[0]
 
         y_mean = predictions[1]['mean'][:, 0]
-        ell_mean = 2 * math.log(0.2)
+        ell_mean = homo_log_var_scale
         y_var = predictions[1]['cov'][:, 0, 0]
         ell_var = 0
+        
+
+        if not mcvi and heteroskedastic: # NEW
+            # print("DVI")
+            # print("predictions[1]['mean'].shape")
+            # print(predictions[1]['mean'].shape)
+            ell_mean = predictions[1]['mean'][:,1] # NEW
+            ell_var  = predictions[1]['cov'][:,1,1] # NEW
+        # elif mcvi:
+        #     print("MCVI")
+        #     print("predictions[1]['mean'].shape")
+        #     print(predictions[1]['mean'].shape)
 
         heteroskedastic_part = np.exp(0.5 * ell_mean)
         full_std = np.sqrt(y_var + np.exp(ell_mean + 0.5 * ell_var))
@@ -64,7 +84,10 @@ def draw_regression_result(data, data_generator, predictions=None, name=None):
     plt.ylabel('y')
     plt.ylim([-3, 2])
     plt.legend()
+    # print("Reached end of plotting function")
+    # print(name)
     plt.savefig(name)
+    # print("Saved figure")
     plt.close()
 
 
@@ -133,10 +156,12 @@ def generate_classification_data(args):
                                              n_redundant=args.input_size - n_informative,
                                              n_classes=args.n_classes)
         n_classes = args.n_classes
+
     elif args.dataset.strip().lower() == 'circles':
         x_train, y_train = make_circles(n_samples=args.data_size)
         x_test, y_test = make_circles(n_samples=args.test_size)
         n_classes = 2
+
 
     x_train = torch.FloatTensor(x_train).to(args.device)
     y_train = torch.LongTensor(y_train).to(args.device).view(-1, 1)
@@ -167,9 +192,9 @@ def draw_classification_results(data, prediction, name, args):
     plt.scatter(x[:, 0], x[:, 1], c=y)
 
     if args.dataset == "circles":
-        path = 'pics/classification/circles'
+        path = 'NEWpics/classification/circles'
     else:
-        path = 'pics/classification/cls'
+        path = 'NEWpics/classification/cls'
 
     if not os.path.exists(path):
         os.mkdir(path)

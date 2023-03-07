@@ -1,0 +1,21 @@
+Namespace(anneal_updates=1, batch_size=32, clip_grad=0.5, data_size=60000, device=device(type='cpu'), epochs=20, lr=0.001, mc_samples=20, mcvi=False, no_mc=False, reshape=False, test_batch_size=32, use_samples=False, use_sqrt_sigma=False, var1=False, var2=False, var3=False, var4=False, var5=False, warmup_updates=0, zm=False)
+LeNetVariance(
+  (conv1): MeanFieldConv2d(in_channels=1, out_channels=6, kernel_size=(5, 5), stride=1, padding=2, activation=relu)
+  (conv2): MeanFieldConv2d(in_channels=6, out_channels=16, kernel_size=(5, 5), stride=1, padding=0, activation=relu)
+  (fc1): DeterministicReluGaussian(in_features=400, out_features=120)
+  (fc2): DeterministicReluGaussian(in_features=120, out_features=84)
+  (fc3): DeterministicReluGaussian(in_features=84, out_features=10)
+  (avg_pool): AveragePoolGaussian(kernel_size= (2, 2), stride=None, padding=0)
+)
+  epoch         kl     tr_elbo    tr_acc    tr_ll    tr_time    te_acc_mcvi    te_time_mcvi    te_acc_dvi    te_acc_samples    te_time_dvi
+-------  ---------  ----------  --------  -------  ---------  -------------  --------------  ------------  ----------------  -------------
+      0  9.752e-02  -3.402e-01    0.9291   -0.243    381.452         0.9769          76.362        0.9763            0.8970         20.704
+      1  6.719e-02  -1.430e-01    0.9785   -0.076    379.026         0.9764          78.826        0.9795            0.9059         19.846
+      2  4.706e-02  -1.052e-01    0.9847   -0.058    379.427         0.9791          80.738        0.9842            0.9040         19.472
+      3  3.599e-02  -8.410e-02    0.9879   -0.048    377.379         0.9846          76.197        0.9850            0.9020         20.712
+      4  3.063e-02  -7.033e-02    0.9905   -0.040    381.767         0.9850          72.228        0.9850            0.8951         19.674
+      5  2.701e-02  -6.353e-02    0.9912   -0.037    384.290         0.9848          74.259        0.9880            0.8987         20.161
+      6  2.428e-02  -5.419e-02    0.9930   -0.030    380.415         0.9841          78.653        0.9866            0.8884         19.396
+      7  2.211e-02  -5.068e-02    0.9939   -0.029    372.781         0.9840          78.599        0.9864            0.9003         19.356
+      8  2.057e-02  -4.445e-02    0.9951   -0.024    386.497         0.9827          76.217        0.9873            0.8886         20.523
+      9  1.921e-02  -4.110e-02    0.9956   -0.022    376.054         0.9824          75.545        0.9846            0.8809         19.315

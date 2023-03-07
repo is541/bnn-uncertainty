@@ -22,14 +22,14 @@ class DiagonalGaussianVar(object):
         if n_sample is None:
             no_sample_dim = True
             n_sample = 1
-        s = tf.random_normal(shape=tf.concat([[n_sample], self.shape], axis=0)) * tf.sqrt(self.var) + self.mean
+        s = tf.random.normal(shape=tf.concat([[n_sample], self.shape], axis=0)) * tf.sqrt(self.var) + self.mean
         if no_sample_dim:
             return s[0,...]
         else:
             return s
 
     def log_likelihood(self, x):
-        return -0.5 * (bu.log2pi + tf.log(self.var) + (x - self.mean)**2 / self.var)
+        return -0.5 * (bu.log2pi + tf.math.log(self.var) + (x - self.mean)**2 / self.var)
 
 class DiagonalLaplaceVar(object):
     def __init__(self, mean, var, shape=None):
@@ -42,7 +42,7 @@ class DiagonalLaplaceVar(object):
         return tf.contrib.distributions.Laplace(loc=self.mean, scale=self.b).sample()
     
     def log_likelihood(self, x):
-        return -(tf.log(2*self.b) + tf.abs(x - self.mean)/self.b)
+        return -(tf.math.log(2*self.b) + tf.abs(x - self.mean)/self.b)
     
 class InverseGammaVar(object):
     def __init__(self, alpha, beta, shape=None):
@@ -57,15 +57,15 @@ def KL(p, q, hypers=None, global_step=1.0E99):
     if isinstance(p, DiagonalGaussianVar):
         if isinstance(q, DiagonalGaussianVar):
             safe_qvar = q.var + bu.EPSILON
-            entropy_term = 0.5 * (1 + bu.log2pi + tf.log(p.var))
-            cross_entropy_term = 0.5 * (bu.log2pi + tf.log(safe_qvar) + (p.var + (p.mean - q.mean)**2) / safe_qvar)           
+            entropy_term = 0.5 * (1 + bu.log2pi + tf.math.log(p.var))
+            cross_entropy_term = 0.5 * (bu.log2pi + tf.math.log(safe_qvar) + (p.var + (p.mean - q.mean)**2) / safe_qvar)           
             return tf.reduce_sum(cross_entropy_term - entropy_term)
         elif isinstance(q, DiagonalLaplaceVar):
             sigma = tf.sqrt(p.var)
             mu_ovr_sigma = p.mean / sigma
             tmp = 2 * bu.standard_gaussian(mu_ovr_sigma) + mu_ovr_sigma * tf.erf(mu_ovr_sigma * bu.one_ovr_sqrt2)
             tmp *= sigma / q.b
-            tmp += 0.5 * tf.log(2 * q.b * q.b / (pi * p.var)) - 0.5
+            tmp += 0.5 * tf.math.log(2 * q.b * q.b / (pi * p.var)) - 0.5
             return tf.reduce_sum(tmp)
         elif isinstance(q, InverseGammaVar):
             return EBKL(p, q, hypers, global_step)
@@ -74,14 +74,14 @@ def KL(p, q, hypers=None, global_step=1.0E99):
 def EBKL(p, q, hypers=None, global_step=1.0E99):
     if isinstance(p, DiagonalGaussianVar):
         if isinstance(q, InverseGammaVar):
-            m = tf.to_float(tf.reduce_prod(tf.shape(p.mean)))
+            m = tf.cast(tf.reduce_prod(tf.shape(p.mean)), tf.float32)
             S = tf.reduce_sum(p.var + p.mean*p.mean)
             m_plus_2alpha_plus_2 = m + 2.0*q.alpha + 2.0
             S_plus_2beta = S + 2.0*q.beta
             
-            tmp = m * tf.log(S_plus_2beta / m_plus_2alpha_plus_2)
+            tmp = m * tf.math.log(S_plus_2beta / m_plus_2alpha_plus_2)
             tmp += S * (m_plus_2alpha_plus_2 / S_plus_2beta)
-            tmp += -(m + tf.reduce_sum(tf.log(p.var)))
+            tmp += -(m + tf.reduce_sum(tf.math.log(p.var)))
             return 0.5 * tmp
     print('unsupported KL')
             

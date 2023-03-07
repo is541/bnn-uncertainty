@@ -25,14 +25,14 @@ def linear_certain_activations(x_certain, A, b):
     x_mean = x_certain
     xx = x_mean*x_mean
     y_mean = tf.matmul(x_mean, A.mean) + b.mean
-    y_cov = tf.matrix_diag(tf.matmul(xx, A.var) + b.var)
+    y_cov = tf.compat.v1.matrix_diag(tf.matmul(xx, A.var) + b.var)
     return gv.GaussianVar(y_mean, y_cov)
 
 def linear_relu(x, A, b):
     """
     compute y = relu(x)^T A + b
     """
-    x_var_diag = tf.matrix_diag_part(x.var)
+    x_var_diag = tf.compat.v1.matrix_diag_part(x.var)
     sqrt_x_var_diag = tf.sqrt(x_var_diag)
     mu = x.mean / (sqrt_x_var_diag + EPSILON)
     
@@ -81,7 +81,7 @@ def linear_heaviside(x, A, b):
     """
     compute y = heaviside(x)^T A + b
     """
-    x_var_diag = tf.matrix_diag_part(x.var)
+    x_var_diag = tf.compat.v1.matrix_diag_part(x.var)
     mu = x.mean / (tf.sqrt(x_var_diag) + EPSILON)
     
     def heaviside_covariance(x):
@@ -112,7 +112,7 @@ def linear_covariance_diagonal(x_mean, x_var, A, b):
     return result_diag
 
 def linear_covariance(x_mean, x_cov, A, b):
-    x_var_diag = tf.matrix_diag_part(x_cov)
+    x_var_diag = tf.compat.v1.matrix_diag_part(x_cov)
     xx_mean = x_var_diag + x_mean * x_mean
     
     term1_diag = tf.matmul(xx_mean, A.var)
@@ -126,12 +126,12 @@ def linear_covariance(x_mean, x_cov, A, b):
     A_xCov_A = tf.reshape(A_xCov_A, [-1, A.shape[1], A.shape[1]]) # [b, y, y]
 
     term2 = A_xCov_A
-    term2_diag = tf.matrix_diag_part(term2)
+    term2_diag = tf.compat.v1.matrix_diag_part(term2)
     
     term3_diag = b.var
     
     result_diag = term1_diag + term2_diag + term3_diag
-    return tf.matrix_set_diag(term2, result_diag)      
+    return tf.compat.v1.matrix_set_diag(term2, result_diag)      
 
 def logsumexp(y, keepdims=False):
     """
@@ -139,7 +139,7 @@ def logsumexp(y, keepdims=False):
     """
     lse = tf.reduce_logsumexp(y.mean, axis=-1, keep_dims=keepdims)   # [b, 1]
     p = tf.exp(y.mean - lse)  # softmax                              # [b, y]
-    pTDiagVar = tf.reduce_sum(p * tf.matrix_diag_part(y.var), axis=-1, keep_dims=keepdims)        # [b, 1]
+    pTDiagVar = tf.reduce_sum(p * tf.compat.v1.matrix_diag_part(y.var), axis=-1, keep_dims=keepdims)        # [b, 1]
     pTVarp = tf.squeeze(tf.matmul(tf.expand_dims(p, 1), tf.matmul(y.var, tf.expand_dims(p, 2))), axis=-1) # [b]
     return lse + 0.5 * (pTDiagVar - pTVarp)
 
