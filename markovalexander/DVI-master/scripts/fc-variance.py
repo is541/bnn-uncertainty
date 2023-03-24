@@ -21,7 +21,7 @@ parser.add_argument('--mcvi', action='store_true')
 parser.add_argument('--mc_samples', default=20, type=int)
 parser.add_argument('--clip_grad', type=float, default=0.5)
 parser.add_argument('--lr', type=float, default=1e-3)
-parser.add_argument('--epochs', type=int, default=20)  #150
+parser.add_argument('--epochs', type=int, default=100)  #150
 parser.add_argument('--zm', action='store_true')
 parser.add_argument('--no_mc', action='store_true')
 parser.add_argument('--use_samples', action='store_true')
@@ -62,7 +62,7 @@ if __name__ == "__main__":
     train_loader, test_loader = load_mnist(args)
     args.data_size = len(train_loader.dataset)
 
-    logger = Logger('lenet-variance', fmt=fmt)
+    logger = Logger('fc-variance', fmt=fmt)
     logger.print(args)
     logger.print(model)
 
@@ -110,6 +110,17 @@ if __name__ == "__main__":
         accuracy = np.mean(accuracy)
         logger.add(epoch, kl=kl, tr_elbo=elbo, tr_acc=accuracy, tr_ll=cat_mean,
                    tr_time=t1)
+        
+        # Save model 
+        if epoch%5==0:
+            path = './Checkpoints/Fc_variance_epoch_' + str(epoch)
+            # torch.save({
+            #     'epoch': epoch,
+            #     'model_state_dict': model.state_dict(),
+            #     'optimizer_state_dict': optimizer.state_dict(),
+            #     'loss': loss,
+            # }, path + '.pth')
+            torch.save(model.state_dict(), path + '.pth')
 
         model.eval()
         t_dvi = time()

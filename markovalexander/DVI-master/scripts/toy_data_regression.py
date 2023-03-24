@@ -4,6 +4,7 @@ import math
 import numpy as np
 import torch
 from torch import nn
+from core.logger import Logger
 
 from core.layers import LinearGaussian, ReluGaussian
 from core.losses import RegressionLoss
@@ -16,7 +17,7 @@ EPS = 1e-6
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument('--batch_size', type=int, default=500)
+parser.add_argument('--batch_size', type=int, default=200)  # 500
 parser.add_argument('--mcvi', action='store_true')
 parser.add_argument('--hid_size', type=int, default=128)
 parser.add_argument('--heteroskedastic', default=True, action='store_true')
@@ -34,11 +35,16 @@ parser.add_argument('--lr', type=float, default=1e-2)
 parser.add_argument('--gamma', type=float, default=0.5,
                     help='lr decrease rate in MultiStepLR scheduler')
 # parser.add_argument('--epochs', type=int, default=23000)
-parser.add_argument('--epochs', type=int, default=10001)
+parser.add_argument('--epochs', type=int, default=20000)
 parser.add_argument('--draw_every', type=int, default=1000)
 parser.add_argument('--milestones', nargs='+', type=int,
                     default=[1000, 3000, 5000, 9000, 13000])
 
+
+fmt = {'ELBO': '3.3e',
+       'kl': '3.3e',
+       'll': '.4f',
+       'lmbda': '.4f'}
 
 def base_model(x):
     return -(x + 0.5) * np.sin(3 * np.pi * x)
@@ -93,7 +99,11 @@ class Model(nn.Module):
     #     self.out.mcvi()
 
 def train_and_predict(args):
+    logger = Logger('toy-regression', fmt=fmt)
+    logger.print(args)
+
     model = Model(args).to(args.device)
+    logger.print(model)
     loss = RegressionLoss(model, args)
     x_train, y_train, x_test, y_test, toy_data = generate_regression_data(args,
                                                                           sample_data,
@@ -117,7 +127,7 @@ def train_and_predict(args):
         optimizer.zero_grad()
 
         pred = model(x_train)
-        neg_elbo, ll, kl = loss(pred, y_train, step)
+        neg_elbo, ll, kl, lmbda = loss(pred, y_train, step)
 
         neg_elbo.backward()
 
@@ -127,10 +137,15 @@ def train_and_predict(args):
         optimizer.step()
         scheduler.step()
 
-        if epoch % args.draw_every == 0:
-            print("epoch : {}".format(epoch))
-            print("ELBO : {:.4f}\t Likelihood: {:.4f}\t KL: {:.4f}".format(
-                -neg_elbo.item(), ll.item(), kl.item()))
+        # if epoch % args.draw_every == 0:
+            # print("epoch : {}".format(epoch))
+            # print("ELBO : {:.4f}\t Likelihood: {:.4f}\t KL: {:.4f}\t Lmbda: {:.4f}".format(
+            #     -neg_elbo.item(), ll.item(), kl.item(), lmbda.item()))
+        if epoch % 20 == 0:
+            logger.add(epoch, ELBO=-neg_elbo.item(),ll=ll.item(), kl=kl.item(), lmbda=lmbda.item())
+            logger.iter_info()
+            logger.save(silent=True)
+        # logger.save()
 
         if epoch % args.draw_every == 0:
             with torch.no_grad():
@@ -146,6 +161,10 @@ def train_and_predict(args):
                                        homo_log_var_scale=args.homo_log_var_scale,
                                        mcvi=args.mcvi
                                        )
+            
+            path = './Checkpoints/Toy_regression_epoch_' + str(epoch)
+            torch.save(model.state_dict(), path + '.pth')
+    logger.save()
 
     with torch.no_grad():
         predictions = get_predictions(x_train, model, args, args.mcvi)
@@ -176,29 +195,11 @@ if __name__ == "__main__":
             'cuda:{}'.format(args_swapped.device) if torch.cuda.is_available() else 'cpu')
         args_swapped.mcvi = False
         train_and_predict(args_swapped)
-        # model = Model(args_swapped).to(args_swapped.device)
-        # # model.determenistic()
-        # with torch.no_grad():
-        #     predictions = get_predictions(x_train, model, args_swapped, False)
-        #     draw_regression_result(toy_data,
-        #                            {'mean': base_model,
-        #                             'std': lambda x: noise_model(x, args_swapped)},
-        #                            predictions=predictions,
-        #                            name='NEWpics/regression/{}/swapped.png'.format(
-        #                                mode))
+
     else:
         args_swapped = parser.parse_args()
         args_swapped.device = torch.device(
             'cuda:{}'.format(args_swapped.device) if torch.cuda.is_available() else 'cpu')
         args_swapped.mcvi = True
         train_and_predict(args_swapped)
-        # model = Model(args_swapped).to(args_swapped.device)
-        # # model.mcvi()
-        # with torch.no_grad():
-        #     predictions = get_predictions(x_train, model, args_swapped, True)
-        #     draw_regression_result(toy_data,
-        #                            {'mean': base_model,
-        #                             'std': lambda x: noise_model(x, args_swapped)},
-        #                            predictions=predictions,
-        #                            name='NEWpics/regression/{}/swapped.png'.format(
-        #                                mode))
+

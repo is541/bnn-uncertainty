@@ -81,8 +81,10 @@ class RegressionLoss(nn.Module):
         for module in self.net.children():
             if hasattr(module, 'compute_kl'):
                 kl = kl + module.compute_kl()
+                # print("kl: ", kl)
         if hasattr(self.net, 'compute_kl'):
             kl = kl + self.net.compute_kl()
+            # print("kl: ", kl)
 
         gaussian_likelihood = self.heteroskedastic_gaussian_loglikelihood if self.use_het \
             else self.homoskedastic_gaussian_loglikelihood
@@ -91,9 +93,13 @@ class RegressionLoss(nn.Module):
         batched_likelihood = torch.mean(log_likelihood)
 
         lmbda = clip((step - self.warmup) / self.anneal, 0, 1)
+        # print("warmup: ", self.warmup)
+        # print("anneal: ", self.anneal)
+        # if step % self.batch_size == 0:
+        #     print("lmbda: ", lmbda)
 
         loss = lmbda * kl / self.batch_size - batched_likelihood
-        return loss, batched_likelihood, kl / self.batch_size
+        return loss, batched_likelihood, kl / self.batch_size, lmbda
 
 
 class ClassificationLoss(nn.Module):
